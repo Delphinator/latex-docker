@@ -1,29 +1,41 @@
 ARG BASE_TAG=focal
 FROM ubuntu:${BASE_TAG}
-MAINTAINER Benedikt Lang <mail@blang.io>
 ENV DEBIAN_FRONTEND noninteractive
-
-RUN apt-get update -q \
-    && apt-get install -qy build-essential wget libfontconfig1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install TexLive with scheme-basic
-RUN wget http://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz; \
-	mkdir /install-tl-unx; \
-	tar -xvf install-tl-unx.tar.gz -C /install-tl-unx --strip-components=1; \
-    echo "selected_scheme scheme-basic" >> /install-tl-unx/texlive.profile; \
-	/install-tl-unx/install-tl -profile /install-tl-unx/texlive.profile; \
-    rm -r /install-tl-unx; \
-	rm install-tl-unx.tar.gz
-
-RUN cd /usr/local/texlive/ \
-    && ln -s $(find . -type d -regextype posix-egrep -regex '^./2[0-9]{3}$') current
-ENV PATH="/usr/local/texlive/current/bin/x86_64-linux:${PATH}"
 
 ENV HOME /data
 WORKDIR /data
 
-# Install latex packages
-RUN tlmgr install latexmk
+RUN apt-get update -q \
+    && apt-get install -qy build-essential locales wget xz-utils libfontconfig1 perl \
+    # setup locale
+    && echo "de_DE.UTF-8 UTF-8" > /etc/locale.gen && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
+    && locale-gen && update-locale LANG="de_DE.UTF-8" \
+    # Install TexLive with scheme-basic
+    && wget http://mirror.ctan.org/systems/texlive/tlnet/install-tl-unx.tar.gz \
+	&& mkdir /install-tl-unx \
+	&& tar -xvf install-tl-unx.tar.gz -C /install-tl-unx --strip-components=1 \
+    && echo "selected_scheme scheme-basic" >> /install-tl-unx/texlive.profile \
+    && echo "tlpdbopt_autobackup 0" >> /install-tl-unx/texlive.profile \
+    && echo "tlpdbopt_install_docfiles 0" >> /install-tl-unx/texlive.profile \
+    && echo "tlpdbopt_install_srcfiles 0" >> /install-tl-unx/texlive.profile \
+	&& /install-tl-unx/install-tl -profile /install-tl-unx/texlive.profile \
+    && rm -r /install-tl-unx \
+	&& rm install-tl-unx.tar.gz \
+    && cd /usr/local/texlive/ \
+    && ln -s $(find . -type d -regextype posix-egrep -regex '^./2[0-9]{3}$') current \
+    && export PATH="/usr/local/texlive/current/bin/x86_64-linux:${PATH}" \
+    && export TEXMFCACHE="/usr/local/texlive/current/texmf-cache/" \
+    # Install latex packages
+    && tlmgr install latexmk \
+    # update font cache
+    && luaotfload-tool -u \
+    # cleanup
+    && apt-get purge -qy build-essential \
+    && apt-get autopurge -qy \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH="/usr/local/texlive/current/bin/x86_64-linux:${PATH}"
+ENV TEXMFCACHE /usr/local/texlive/current/texmf-cache/
 
 VOLUME ["/data"]
